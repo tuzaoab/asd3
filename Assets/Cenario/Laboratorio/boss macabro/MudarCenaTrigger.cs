@@ -15,7 +15,7 @@ public class MudarCenaTrigger : MonoBehaviour
         // Verifica se o nome da cena não está vazio
         if (string.IsNullOrEmpty(nomeDaProximaCena))
         {
-            Debug.LogWarning("⚠️ Você esqueceu de colocar o nome da próxima cena no Inspector!");
+            Debug.LogWarning("Você esqueceu de colocar o nome da próxima cena no Inspector!");
             return;
         }
  
@@ -29,7 +29,7 @@ public class MudarCenaTrigger : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("⚠️ Nenhum FadeManager encontrado. Carregando a cena sem efeito de fade.");
+            Debug.LogWarning("Nenhum FadeManager encontrado. Carregando a cena sem efeito de fade.");
             SceneManager.LoadScene(nomeDaProximaCena);
         }
     }
