@@ -27,6 +27,7 @@ public class WeaponSwitcher : MonoBehaviour
 
     void Update()
     {
+        // Teclas numéricas normais
         if (Input.GetKeyDown(KeyCode.Alpha1))
         {
             SwitchWeapon(pistol);
@@ -38,6 +39,28 @@ public class WeaponSwitcher : MonoBehaviour
             SwitchWeapon(shotgun);
             UpdateIndicators();
         }
+
+        // ==================== SISTEMA DE QUICK SWITCH ====================
+        // Checa se apertou Q ou o Clique do Meio do Mouse (botão 2)
+        if (Input.GetKeyDown(KeyCode.Q) || Input.GetMouseButtonDown(2))
+        {
+            AlternarArmaAtual();
+        }
+    }
+
+    // Função que faz o "Toggle" inteligente entre as duas armas
+    void AlternarArmaAtual()
+    {
+        if (activeWeapon == pistol)
+        {
+            SwitchWeapon(shotgun);
+        }
+        else
+        {
+            SwitchWeapon(pistol);
+        }
+
+        UpdateIndicators();
     }
 
     void SwitchWeapon(GameObject newWeapon)
@@ -54,14 +77,12 @@ public class WeaponSwitcher : MonoBehaviour
 
     void UpdateIndicators()
     {
-        // Ativa apenas o indicador correspondente
         pistolIndicator.gameObject.SetActive(activeWeapon == pistol);
         shotgunIndicator.gameObject.SetActive(activeWeapon == shotgun);
     }
 
     void UpdateAmmoUI()
     {
-        // Pistola
         Gun gun = activeWeapon.GetComponent<Gun>();
         if (gun != null)
         {
@@ -69,7 +90,6 @@ public class WeaponSwitcher : MonoBehaviour
             return;
         }
 
-        // Espingarda
         Escopeta escopeta = activeWeapon.GetComponent<Escopeta>();
         if (escopeta != null)
         {

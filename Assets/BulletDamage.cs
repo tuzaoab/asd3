@@ -13,6 +13,7 @@ public class BulletDamage : MonoBehaviour
 
     void OnTriggerEnter2D(Collider2D other)
     {
+        // 1. CHECAGEM DOS INIMIGOS COMUNS (Zumbis)
         EnemyZombie zombie = other.GetComponentInParent<EnemyZombie>();
         EnemyZombieTank tank = null;
 
@@ -33,6 +34,33 @@ public class BulletDamage : MonoBehaviour
             PlaySound(hitTankSound, tankVolume);
             Vector2 dir = ((Vector2)tank.transform.position - (Vector2)transform.position).normalized;
             tank.TakeDamage(damage, dir);
+            Destroy(gameObject);
+            return;
+        }
+
+        // ========================================================
+        // 2. DETECÇÃO DO BOSS PÁSSARO MUTANTE
+        // ========================================================
+        MutantBirdHealth bossHealth = other.GetComponentInParent<MutantBirdHealth>();
+        
+        if (bossHealth != null)
+        {
+            MutantBirdAI bossAI = bossHealth.GetComponent<MutantBirdAI>();
+
+            if (bossAI != null)
+            {
+                // MECÂNICA DE DEFESA: Se o boss estiver defendendo, a bala some na hora
+                if (bossAI.currentState == MutantBirdAI.BossState.Defesa)
+                {
+                    Destroy(gameObject);
+                    return; 
+                }
+            }
+
+            // Se o boss NÃO estiver defendendo, toma o dano normalmente pelo script de vida
+            PlaySound(hitNormalSound, normalVolume); 
+            bossHealth.TomarDano(damage);
+            
             Destroy(gameObject);
             return;
         }

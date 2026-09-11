@@ -8,7 +8,10 @@ public class PlayerMovement : MonoBehaviour
     public Character Character;
     public float walkSpeed = 3f;
     public float runSpeed = 5f;
+    
+    [Header("Limites de Movimentação")]
     public float minY = -2f, maxY = 2f;
+    public float minX = -100f, maxX = 100f;
 
     public float dashSpeed = 12f;
     public float dashDuration = 0.15f;
@@ -36,6 +39,9 @@ public class PlayerMovement : MonoBehaviour
     float dashTime;
     float dashCooldownTimer;
     Vector2 dashDir;
+
+    // NOVA VARIÁVEL: Controla o estado de liga/desliga da corrida
+    private bool isSprinting = false;
 
     void Awake()
     {
@@ -71,20 +77,37 @@ public class PlayerMovement : MonoBehaviour
             input.x = Input.GetAxisRaw("Horizontal");
             input.y = Input.GetAxisRaw("Vertical");
 
-            bool shift = Input.GetKey(KeyCode.LeftShift);
-            currentSpeed = shift ? runSpeed : walkSpeed;
-            input = input.normalized * currentSpeed;
+            // AJUSTE: Verifica se o jogador apertou o Shift para inverter o Toggle
+            if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift))
+            {
+                isSprinting = !isSprinting;
+            }
 
             bool moving = input.sqrMagnitude > 0.01f;
-            animator.SetBool("IsRunning", shift && moving);
-            animator.SetBool("IsWalking", !shift && moving);
 
-            if (moving) GerenciarSomDePassos(shift);
+            // Se o jogador parar de andar, podemos resetar a corrida? 
+            // Opcional: Se quiser que ele continue correndo assim que voltar a andar, mantenha como está.
+            // Se quiser que a corrida desligue ao parar de se mover, descomente a linha abaixo:
+            // if (!moving) isSprinting = false;
+
+            currentSpeed = isSprinting ? runSpeed : walkSpeed;
+            input = input.normalized * currentSpeed;
+
+            animator.SetBool("IsRunning", isSprinting && moving);
+            animator.SetBool("IsWalking", !isSprinting && moving);
+
+            if (moving) GerenciarSomDePassos(isSprinting);
             else PararSomDePassos();
 
             HandleCharacterFlip();
 
-            if (Input.GetKeyDown(KeyCode.Q) && moving && dashCooldownTimer <= 0)
+            // MUDANÇA DOS BOTÕES DO DASH: Aceita Q, Botão Direito do Mouse (1) ou Alt (esquerdo ou direito)
+            bool apertouBotaoDash =
+                                   Input.GetMouseButtonDown(1) || 
+                                   Input.GetKeyDown(KeyCode.LeftAlt) || 
+                                   Input.GetKeyDown(KeyCode.RightAlt);
+
+            if (apertouBotaoDash && moving && dashCooldownTimer <= 0)
             {
                 ExecutarDash();
             }
@@ -137,10 +160,14 @@ public class PlayerMovement : MonoBehaviour
         dashCooldownTimer = dashCooldown;
         dashTime = dashDuration;
         isDashing = true;
+        
+        // Salvamos a direção baseado na velocidade e direção atuais
         dashDir = input.normalized;
 
         if ((dashDir.y > 0 && rb.position.y >= maxY) || (dashDir.y < 0 && rb.position.y <= minY))
             dashDir.y = 0;
+        if ((dashDir.x > 0 && rb.position.x >= maxX) || (dashDir.x < 0 && rb.position.x <= minX))
+            dashDir.x = 0;
 
         Character.isInvincible = true;
 
@@ -158,7 +185,18 @@ public class PlayerMovement : MonoBehaviour
     {
         Vector2 velocity = isDashing ? dashDir * dashSpeed : input;
         Vector2 newPos = rb.position + velocity * Time.fixedDeltaTime;
+        
+        newPos.x = Mathf.Clamp(newPos.x, minX, maxX);
         newPos.y = Mathf.Clamp(newPos.y, minY, maxY);
+        
         rb.MovePosition(newPos);
+    }
+
+    public void AlterarLimitesDeMovimento(float novoMinX, float novoMaxX, float novoMinY, float novoMaxY)
+    {
+        minX = novoMinX;
+        maxX = novoMaxX;
+        minY = novoMinY;
+        maxY = novoMaxY;
     }
 }
