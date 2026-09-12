@@ -16,6 +16,7 @@ public class EnemyZombieTank : MonoBehaviour
     public int maxHP = 4;
     public float knockbackForce = 3f;
     public float attackCooldown = 1f;
+    private bool jaMorreu = false; // Trava para evitar contagem duplicada da espingarda
 
     [Header("Charge Attack")]
     public float chargeSpeed = 25f;
@@ -23,7 +24,7 @@ public class EnemyZombieTank : MonoBehaviour
     public float chargeCooldown = 7f;
 
     [Header("Audio")]
-    public AudioSource audioSource; 
+    public AudioSource audioSource;
     public AudioClip stepSound;
     public AudioClip[] randomVoices = new AudioClip[4];
     [Range(0f, 1f)] public float stepVolume = 0.5f;
@@ -65,7 +66,7 @@ public class EnemyZombieTank : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         animator = GetComponentInChildren<Animator>();
-        
+
         rb.gravityScale = 0f;
         rb.constraints = RigidbodyConstraints2D.FreezeRotation;
         rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
@@ -134,7 +135,7 @@ public class EnemyZombieTank : MonoBehaviour
         if (moving && !audioSource.isPlaying)
         {
             audioSource.volume = stepVolume;
-            audioSource.UnPause(); 
+            audioSource.UnPause();
             if (!audioSource.isPlaying) audioSource.Play();
         }
         else if (!moving && audioSource.isPlaying)
@@ -235,6 +236,9 @@ public class EnemyZombieTank : MonoBehaviour
 
     public void TakeDamage(int amount, Vector2 knockDir)
     {
+        // Se o Tank já morreu, ignora tiros extras instantâneos da escopeta
+        if (jaMorreu) return;
+
         currentHP -= amount;
 
         if (bloodExplosion != null)
@@ -249,15 +253,25 @@ public class EnemyZombieTank : MonoBehaviour
         }
 
         rb.AddForce(knockDir.normalized * knockbackForce, ForceMode2D.Impulse);
-        
+
         StopAllCoroutines();
         StartCoroutine(DamageFlash());
-        StartCoroutine(RandomVoiceRoutine()); 
+        StartCoroutine(RandomVoiceRoutine());
     }
 
     void Die()
     {
+        if (jaMorreu) return; // Trava dupla segurança
+        jaMorreu = true;
+
         if (spawner != null) spawner.currentZombies--;
+
+        // AVISA O GERENCIADOR DE MISSÃO PARA CONTAR O KILL DO TANK
+        if (GerenciadorMissao.Instancia != null)
+        {
+            GerenciadorMissao.Instancia.RegistrarMorteZumbi();
+        }
+
         SpawnBloodOnGround();
         Destroy(gameObject);
     }

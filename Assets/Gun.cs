@@ -16,8 +16,11 @@ public class Gun : MonoBehaviour
     public float spinDuration = 0.166f;
     public int spinTurns = 3;
     public TrailRenderer trail;
+
+    [Header("UI / HUD de Munição")]
+    public Animator ammoHUDAnimator;
     public TMP_Text ammoText;
-    
+
     private Vector3 originalPosition;
     private Quaternion originalRotation;
     private int shotCount = 0;
@@ -50,17 +53,14 @@ public class Gun : MonoBehaviour
     public float idleAngle = 0f;
     public float walkAngle = -5f;
     public float runAngle = -15f;
-    
+
     [Header("Ajustes de Lado")]
     public float rightSideX = 0.2f;
     public float leftSideX = -0.2f;
 
     void Start()
     {
-        // CORREÇÃO: Força o ponto central do X local a ser exatamente 0.
-        // Isso limpa qualquer desalinhamento prévio feito no editor da Unity.
         originalPosition = new Vector3(0f, transform.localPosition.y, transform.localPosition.z);
-        
         originalRotation = transform.localRotation;
         baseZ = transform.localPosition.z;
         initialScale = transform.localScale;
@@ -77,7 +77,7 @@ public class Gun : MonoBehaviour
         renderers = GetComponentsInChildren<SpriteRenderer>();
 
         if (audioSource == null) audioSource = GetComponent<AudioSource>();
-        if (audioSource != null) 
+        if (audioSource != null)
         {
             audioSource.playOnAwake = false;
             audioSource.volume = volumeGiro;
@@ -96,7 +96,7 @@ public class Gun : MonoBehaviour
     {
         if (Character != null && Character.isGameOver) return;
 
-        if (UnityEngine.EventSystems.EventSystem.current != null && 
+        if (UnityEngine.EventSystems.EventSystem.current != null &&
             UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
         {
             return;
@@ -157,8 +157,17 @@ public class Gun : MonoBehaviour
         if (Character == null) return;
 
         Animator charAnimator = Character.GetComponent<Animator>();
-        bool isRunning = charAnimator != null && charAnimator.HasParameter("IsRunning") && charAnimator.GetBool("IsRunning");
-        bool isWalking = charAnimator != null && charAnimator.HasParameter("IsWalking") && charAnimator.GetBool("IsWalking");
+        bool isRunning = false;
+        bool isWalking = false;
+
+        if (charAnimator != null)
+        {
+            foreach (AnimatorControllerParameter param in charAnimator.parameters)
+            {
+                if (param.name == "IsRunning") isRunning = charAnimator.GetBool("IsRunning");
+                if (param.name == "IsWalking") isWalking = charAnimator.GetBool("IsWalking");
+            }
+        }
 
         Vector3 targetOffset;
         float targetAngle;
@@ -180,10 +189,10 @@ public class Gun : MonoBehaviour
         }
 
         Vector3 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        
+
         bool mouseNaEsquerda = mousePos.x < Character.transform.position.x;
         float sideX = mouseNaEsquerda ? leftSideX : rightSideX;
-        
+
         transform.localScale = initialScale;
 
         Vector3 finalOffset;
@@ -191,15 +200,14 @@ public class Gun : MonoBehaviour
         if (mouseNaEsquerda)
         {
             transform.localRotation = Quaternion.Euler(0, 180f, targetAngle);
-            finalOffset = new Vector3(-targetOffset.x + sideX, targetOffset.y, 0);
+            finalOffset = new Vector3(-targetOffset.x + sideX, targetOffset.y, baseZ);
         }
         else
         {
             transform.localRotation = Quaternion.Euler(0, 0, targetAngle);
-            finalOffset = new Vector3(targetOffset.x + sideX, targetOffset.y, 0);
+            finalOffset = new Vector3(targetOffset.x + sideX, targetOffset.y, baseZ);
         }
 
-        // CORREÇÃO: Multiplicado por 5.0f para enrijecer completamente o movimento e tirar o atraso
         transform.localPosition = Vector3.Lerp(transform.localPosition, originalPosition + finalOffset, Time.deltaTime * recoilSpeed * 5f);
     }
 
@@ -234,23 +242,81 @@ public class Gun : MonoBehaviour
     void EndSpin()
     {
         spinning = false;
-        transform.localRotation = originalRotation; 
+        transform.localRotation = originalRotation;
         if (audioSource != null && audioSource.clip == somGiro) audioSource.Stop();
         if (trail != null) { trail.emitting = false; trail.Clear(); }
     }
 
-    void OnEnable() 
-    { 
-        if (isInitialized && Time.timeScale > 0) 
-        { 
-            if (audioSource != null && somRecarga != null) 
-                audioSource.PlayOneShot(somRecarga, volumeRecarga); 
-        } 
+    void Reload()
+    {
+        if (!spinning && !isReloading)
+        {
+            isReloading = true;
+            StartCoroutine(RotinaRecarga());
+        }
     }
 
-    void OnDisable() { isReloading = false; spinning = false; if (audioSource != null) audioSource.Stop(); StopAllCoroutines(); }
-    void Reload() { if (!spinning && !isReloading) { isReloading = true; StartCoroutine(RotinaRecarga()); } }
-    IEnumerator RotinaRecarga() { StartSpin(); yield return new WaitForSeconds(spinDuration); if (audioSource != null && somRecarga != null) audioSource.PlayOneShot(somRecarga, volumeRecarga); currentAmmo = maxAmmo; UpdateAmmoUI(); isReloading = false; }
-    public void UpdateAmmoUI() { if (ammoText != null) ammoText.text = currentAmmo + " / " + maxAmmo; }
-    void ToggleGunVisibility() { gunVisible = !gunVisible; foreach (SpriteRenderer r in renderers) r.enabled = gunVisible; if (trail != null) { trail.emitting = false; trail.Clear(); } if (ammoText != null) ammoText.enabled = gunVisible; }
+    IEnumerator RotinaRecarga()
+    {
+        StartSpin();
+        yield return new WaitForSeconds(spinDuration);
+
+        if (audioSource != null && somRecarga != null)
+            audioSource.PlayOneShot(somRecarga, volumeRecarga);
+
+        yield return new WaitForSeconds(0.3f);
+
+        currentAmmo = maxAmmo;
+        UpdateAmmoUI();
+        isReloading = false;
+    }
+
+    public void UpdateAmmoUI()
+    {
+        if (ammoText != null)
+            ammoText.text = currentAmmo + " / " + maxAmmo;
+
+        if (ammoHUDAnimator != null)
+            ammoHUDAnimator.SetInteger("Ammo", currentAmmo);
+    }
+
+    void ToggleGunVisibility()
+    {
+        gunVisible = !gunVisible;
+        foreach (SpriteRenderer r in renderers) r.enabled = gunVisible;
+        if (trail != null) { trail.emitting = false; trail.Clear(); }
+        if (ammoText != null) ammoText.gameObject.SetActive(gunVisible);
+        if (ammoHUDAnimator != null) ammoHUDAnimator.gameObject.SetActive(gunVisible);
+    }
+
+    void OnEnable()
+    {
+        if (ammoHUDAnimator != null)
+            ammoHUDAnimator.gameObject.SetActive(true);
+
+        if (ammoText != null)
+            ammoText.gameObject.SetActive(true);
+
+        UpdateAmmoUI();
+
+        if (isInitialized && Time.timeScale > 0)
+        {
+            if (audioSource != null && somRecarga != null)
+                audioSource.PlayOneShot(somRecarga, volumeRecarga);
+        }
+    }
+
+    void OnDisable()
+    {
+        if (ammoHUDAnimator != null)
+            ammoHUDAnimator.gameObject.SetActive(false);
+
+        if (ammoText != null)
+            ammoText.gameObject.SetActive(false);
+
+        isReloading = false;
+        spinning = false;
+        if (audioSource != null) audioSource.Stop();
+        StopAllCoroutines();
+    }
 }

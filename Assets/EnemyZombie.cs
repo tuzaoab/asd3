@@ -16,6 +16,8 @@ public class EnemyZombie : MonoBehaviour
     public int maxHP = 3;
     public float knockbackForce = 3f;
     public float attackCooldown = 1f;
+    float nextAttackTime;
+    private bool jaMorreu = false; // Trava para evitar contagem duplicada da espingarda
 
     [Header("Audio")]
     public AudioSource audioSource;
@@ -42,7 +44,6 @@ public class EnemyZombie : MonoBehaviour
     public bool lockBloodRotation = false;
 
     int currentHP;
-    float nextAttackTime = 0f;
     Rigidbody2D rb;
     SpriteRenderer[] sprites;
     Color[] originalColors;
@@ -190,14 +191,26 @@ public class EnemyZombie : MonoBehaviour
 
     public void TakeDamage(int amount, Vector2 knockDir)
     {
+        // Se já morreu com o primeiro tiro da espingarda, ignora os projéteis extras
+        if (jaMorreu) return;
+
         currentHP -= amount;
 
-        if (bloodExplosion != null) 
+        if (bloodExplosion != null)
             Instantiate(bloodExplosion, transform.position, Quaternion.identity);
 
         if (currentHP <= 0)
         {
+            jaMorreu = true; // Trava ativada para impedir múltiplos registros
+
             if (spawner != null) spawner.currentZombies--;
+
+            // Conta o kill exatamente 1 vez
+            if (GerenciadorMissao.Instancia != null)
+            {
+                GerenciadorMissao.Instancia.RegistrarMorteZumbi();
+            }
+
             SpawnBloodOnGround();
             Destroy(gameObject);
             return;

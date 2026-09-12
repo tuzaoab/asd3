@@ -1,120 +1,169 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
- 
+using System.Collections;
+
 public class MainMenu : MonoBehaviour
 {
     public GameObject mainMenuPanel;
     public GameObject creditsPanel;
     public GameObject gameUI;
- 
+
+    [Header("UI das Armas")]
+    public GameObject hudPistolaMAG;
+
+    [Header("Configurações de Áudio")]
+    public AudioClip musicaPrimeiraFase;
+    public AudioSource audioSourceMusicaMenu; // Arraste o AudioSource do objeto AudioMenu aqui (com Play on Awake DESMARCADO)
+
     [Header("Configurações de Debug / Spawn")]
-    public Transform jogador; // Arraste o seu Player aqui
-    public Transform pontoSpawnDebug; // Arraste um objeto vazio na posição do Debug
- 
-    // Variáveis de controle estáticas (mantêm valor ao carregar novas cenas)
+    public Transform jogador;
+    public Transform pontoSpawnDebug;
+
+    public void AlternarMuteMusicaMenu()
+    {
+        if (audioSourceMusicaMenu != null)
+        {
+            // Inverte o estado atual de mute (se tá mutado, desmuta; se tá tocando, muta)
+            audioSourceMusicaMenu.mute = !audioSourceMusicaMenu.mute;
+
+            Debug.Log("Música do menu mutada? " + audioSourceMusicaMenu.mute);
+        }
+    }
     private static bool devePularMenuNoRefresh = false;
     private static bool usarSpawnDebugNoRefresh = false;
- 
-    /// <summary>
-    /// Chamado pelo MudarCenaTrigger (ou por qualquer troca de cena) para avisar que
-    /// a próxima cena NÃO deve mostrar o menu — só liberar o jogo direto.
-    /// </summary>
+    private static bool musicaJaIniciada = false;
+
     public static void AtivarFadeProximaCena()
     {
         devePularMenuNoRefresh = true;
         usarSpawnDebugNoRefresh = false;
     }
- 
+
     void Awake()
     {
-        // SE O JOGO VEIO DE UM REFRESH OU DE UMA TROCA DE CENA
         if (devePularMenuNoRefresh)
         {
             devePularMenuNoRefresh = false;
- 
+
             Time.timeScale = 1f;
             if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
             if (gameUI != null) gameUI.SetActive(true);
             if (creditsPanel != null) creditsPanel.SetActive(false);
- 
+
+            if (hudPistolaMAG != null) hudPistolaMAG.SetActive(true);
+
+            // Garante que a música do menu fique totalmente desligada durante a gameplay
+            if (audioSourceMusicaMenu != null)
+            {
+                audioSourceMusicaMenu.Stop();
+            }
+
+            // AGUARDA 3 SEGUNDOS PARA ATIVAR O CONTADOR APÓS O REFRESH DA CENA
+            StartCoroutine(AtivarContadorComAtraso(3f));
+
             if (usarSpawnDebugNoRefresh && jogador != null && pontoSpawnDebug != null)
             {
                 jogador.position = pontoSpawnDebug.position;
             }
             usarSpawnDebugNoRefresh = false;
- 
-            // O fade em si já foi iniciado por quem mandou carregar esta cena
-            // (StartGame ou MudarCenaTrigger), através do FadeManager. Aqui só
-            // deixamos o estado (menu escondido, jogo visível) pronto ANTES
-            // da tela clarear, então o jogador nunca vê essa troca acontecer.
         }
         else
         {
-            // COMEÇO NORMAL DO JOGO: Trava no menu
             FicarNoMenu();
         }
     }
- 
+
     void FicarNoMenu()
     {
         Time.timeScale = 0f;
+        musicaJaIniciada = false;
         if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
         if (gameUI != null) gameUI.SetActive(false);
         if (creditsPanel != null) creditsPanel.SetActive(false);
+
+        if (hudPistolaMAG != null) hudPistolaMAG.SetActive(false);
+
+        // Toca a música do menu pulando direto para o segundo 110 (1:50)
+        if (audioSourceMusicaMenu != null && !audioSourceMusicaMenu.isPlaying)
+        {
+            audioSourceMusicaMenu.Play();
+            audioSourceMusicaMenu.time = 100f; // <--- SÓ O MENU COMEÇA AQUI
+        }
     }
- 
-    // BOTÃO 1: Começa o jogo do zero absoluto
+
     public void StartGame()
     {
-        devePularMenuNoRefresh = true;
-        usarSpawnDebugNoRefresh = false;
-        Time.timeScale = 1f;
- 
-        RecarregarCenaAtualComFade();
+        ExecutarTransicaoJogo(false);
     }
- 
-    // BOTÃO 2: Começa o jogo do zero no spawn de Debug
+
     public void StartGameDebug()
     {
-        devePularMenuNoRefresh = true;
-        usarSpawnDebugNoRefresh = true;
-        Time.timeScale = 1f;
- 
-        RecarregarCenaAtualComFade();
+        ExecutarTransicaoJogo(true);
     }
- 
-    // BOTÃO RESTART: Reinicia do zero limpando tudo
+
     public void RestartGame()
     {
+        ExecutarTransicaoJogo(false);
+    }
+
+    private void ExecutarTransicaoJogo(bool usarDebug)
+    {
         devePularMenuNoRefresh = true;
-        usarSpawnDebugNoRefresh = false;
+        usarSpawnDebugNoRefresh = usarDebug;
         Time.timeScale = 1f;
- 
+
+        // Para a música do menu imediatamente ao clicar em jogar
+        if (audioSourceMusicaMenu != null)
+        {
+            audioSourceMusicaMenu.Stop();
+        }
+
+        DispararMusicaInstantanea();
         RecarregarCenaAtualComFade();
     }
- 
+
+    private IEnumerator AtivarContadorComAtraso(float segundos)
+    {
+        yield return new WaitForSecondsRealtime(segundos);
+
+        if (GerenciadorMissao.Instancia != null)
+        {
+            GerenciadorMissao.Instancia.IniciarMissao();
+        }
+    }
+
+    private void DispararMusicaInstantanea()
+    {
+        if (!musicaJaIniciada && ControleMusica.Instancia != null && musicaPrimeiraFase != null)
+        {
+            musicaJaIniciada = true;
+            ControleMusica.Instancia.IniciarMusicaComFade(musicaPrimeiraFase);
+        }
+    }
+
     private void RecarregarCenaAtualComFade()
     {
         int indiceCenaAtual = SceneManager.GetActiveScene().buildIndex;
- 
+
         if (FadeManager.Instance != null)
             FadeManager.Instance.CarregarCenaComFade(indiceCenaAtual);
         else
             SceneManager.LoadScene(indiceCenaAtual);
     }
- 
+
     public void OpenCredits()
     {
         if (creditsPanel != null) creditsPanel.SetActive(true);
         if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
         if (gameUI != null) gameUI.SetActive(false);
+        if (hudPistolaMAG != null) hudPistolaMAG.SetActive(false);
     }
- 
+
     public void CloseCredits()
     {
         if (creditsPanel != null) creditsPanel.SetActive(false);
         if (mainMenuPanel != null) mainMenuPanel.SetActive(true);
         if (gameUI != null) gameUI.SetActive(false);
+        if (hudPistolaMAG != null) hudPistolaMAG.SetActive(false);
     }
 }
- 

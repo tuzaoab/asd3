@@ -1,4 +1,5 @@
 using UnityEngine;
+using TMPro;
 using System.Collections;
 
 public class BotaoAproximacao : MonoBehaviour
@@ -12,94 +13,148 @@ public class BotaoAproximacao : MonoBehaviour
     public Sprite spriteApertado;
     public Sprite spriteSolto;
 
+    [Header("Cooldown no Cenário")]
+    public TextMeshPro textoCooldown;
+    public float tempoCooldown = 25f;
+
     [Header("Indicador de UI (Tela)")]
-    public GameObject iconeUIBebida; // Arraste aqui a imagem do Canvas
+    public GameObject iconeUIBebida;
 
     [Header("Configurações do Power-Up")]
     public float novaVelocidadeCaminhada = 6f;
     public float novaVelocidadeCorrida = 10f;
     public float duracaoEfeito = 10f;
 
+    [Header("Áudio de Ativação")]
+    public AudioSource audioSource; // Arraste o AudioSource aqui (ou ele pega automatico)
+    public AudioClip somAtivacao;   // Arraste o som (ex: beber, powerup, clique) aqui
+
     private bool playerPerto = false;
     private GameObject playerObjeto;
-    private bool jaAtivou = false;
+    private bool emCooldown = false;
 
     void Start()
     {
         if (indicadorE != null)
         {
             spriteRendererIndicador = indicadorE.GetComponent<SpriteRenderer>();
-            indicadorE.SetActive(false);
+            if (spriteRendererIndicador != null) spriteRendererIndicador.enabled = false;
         }
 
-        // Garante que o ícone da tela começa desativado
+        if (textoCooldown != null)
+        {
+            textoCooldown.sortingOrder = 999; // Força ficar em cima de tudo
+            textoCooldown.gameObject.SetActive(false);
+        }
+
         if (iconeUIBebida != null)
         {
             iconeUIBebida.SetActive(false);
+        }
+
+        // Pega o AudioSource automaticamente se estiver no mesmo objeto
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
         }
     }
 
     void Update()
     {
-        if (playerPerto && Input.GetKeyDown(KeyCode.E) && !jaAtivou)
+        if (playerPerto && Input.GetKeyDown(KeyCode.E) && !emCooldown)
         {
-            StartCoroutine(SequenciaAnimacaoEClique());
+            StartCoroutine(RotinaAcaoECooldown());
         }
     }
 
-    IEnumerator SequenciaAnimacaoEClique()
+    IEnumerator RotinaAcaoECooldown()
     {
-        jaAtivou = true;
+        emCooldown = true;
 
-        // --- ANIMAÇÃO TROCANDO OS SPRITES ---
-        if (spriteRendererIndicador != null)
+        // TOCA O SOM INSTANTANEAMENTE AO APERTAR 'E'
+        if (audioSource != null && somAtivacao != null)
         {
-            spriteRendererIndicador.sprite = spriteApertado;
-            yield return new WaitForSeconds(0.2f);
-
-            spriteRendererIndicador.sprite = spriteSolto;
-            yield return new WaitForSeconds(0.2f);
-
-            spriteRendererIndicador.sprite = spriteNormal;
-            yield return new WaitForSeconds(0.25f);
+            audioSource.PlayOneShot(somAtivacao);
         }
 
-        // --- APLICAÇÃO DO TURBO E ATIVAÇÃO DA UI ---
+        // 1. Animação do clique no botão "E"
+        if (spriteRendererIndicador != null)
+        {
+            if (spriteApertado != null) spriteRendererIndicador.sprite = spriteApertado;
+            yield return new WaitForSeconds(0.12f);
+
+            if (spriteSolto != null) spriteRendererIndicador.sprite = spriteSolto;
+            yield return new WaitForSeconds(0.12f);
+
+            spriteRendererIndicador.enabled = false;
+        }
+
+        // 2. LIGA O COOLDOWN (Fica visível independente da distância)
+        if (textoCooldown != null)
+        {
+            textoCooldown.gameObject.SetActive(true);
+            textoCooldown.text = tempoCooldown.ToString();
+        }
+
+        // 3. Aplica o Power-Up de velocidade no Player
+        PlayerMovement movimento = null;
+        float velWalkOrig = 0f;
+        float velRunOrig = 0f;
+
         if (playerObjeto != null)
         {
-            PlayerMovement movimento = playerObjeto.GetComponent<PlayerMovement>();
-
+            movimento = playerObjeto.GetComponent<PlayerMovement>();
             if (movimento != null)
             {
-                float velocidadeCaminhadaOriginal = movimento.walkSpeed;
-                float velocidadeCorridaOriginal = movimento.runSpeed;
+                velWalkOrig = movimento.walkSpeed;
+                velRunOrig = movimento.runSpeed;
 
-                // Ativa a velocidade rápida
                 movimento.walkSpeed = novaVelocidadeCaminhada;
                 movimento.runSpeed = novaVelocidadeCorrida;
 
-                // Some com o "E" flutuante do cenário
-                if (indicadorE != null) indicadorE.SetActive(false);
-
-                // LIGA O ÍCONE NA TELA DO JOGADOR
                 if (iconeUIBebida != null) iconeUIBebida.SetActive(true);
+            }
+        }
 
-                // Espera o tempo do efeito (10 segundos)
-                yield return new WaitForSeconds(duracaoEfeito);
+        // 4. Executa a contagem regressiva
+        float tempoRestante = tempoCooldown;
 
-                // Devolve as velocidades normais
-                if (movimento != null)
-                {
-                    movimento.walkSpeed = velocidadeCaminhadaOriginal;
-                    movimento.runSpeed = velocidadeCorridaOriginal;
-                }
+        while (tempoRestante > 0)
+        {
+            if (textoCooldown != null)
+                textoCooldown.text = Mathf.CeilToInt(tempoRestante).ToString();
 
-                // DESLIGA O ÍCONE NA TELA DO JOGADOR
+            yield return new WaitForSeconds(1f);
+            tempoRestante -= 1f;
+
+            // Retira o efeito de velocidade após atingir a duração definida (10s)
+            if (tempoRestante == (tempoCooldown - duracaoEfeito) && movimento != null)
+            {
+                movimento.walkSpeed = velWalkOrig;
+                movimento.runSpeed = velRunOrig;
                 if (iconeUIBebida != null) iconeUIBebida.SetActive(false);
             }
         }
 
-        jaAtivou = false;
+        // Reset de segurança dos atributos
+        if (movimento != null)
+        {
+            movimento.walkSpeed = velWalkOrig;
+            movimento.runSpeed = velRunOrig;
+            if (iconeUIBebida != null) iconeUIBebida.SetActive(false);
+        }
+
+        // 5. O cooldown acabou: apaga o número
+        if (textoCooldown != null) textoCooldown.gameObject.SetActive(false);
+
+        // Se o player ainda estiver perto quando o cooldown acabar, reativa a tecla "E"
+        if (playerPerto && spriteRendererIndicador != null)
+        {
+            if (spriteNormal != null) spriteRendererIndicador.sprite = spriteNormal;
+            spriteRendererIndicador.enabled = true;
+        }
+
+        emCooldown = false;
     }
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -109,10 +164,11 @@ public class BotaoAproximacao : MonoBehaviour
             playerPerto = true;
             playerObjeto = other.gameObject;
 
-            if (indicadorE != null && !jaAtivou)
+            // Só mostra o ícone "E" se NÃO estiver em cooldown
+            if (!emCooldown && spriteRendererIndicador != null)
             {
-                if (spriteRendererIndicador != null) spriteRendererIndicador.sprite = spriteNormal;
-                indicadorE.SetActive(true);
+                if (spriteNormal != null) spriteRendererIndicador.sprite = spriteNormal;
+                spriteRendererIndicador.enabled = true;
             }
         }
     }
@@ -122,12 +178,9 @@ public class BotaoAproximacao : MonoBehaviour
         if (other.CompareTag("Player"))
         {
             playerPerto = false;
-            playerObjeto = null;
 
-            if (indicadorE != null)
-            {
-                indicadorE.SetActive(false);
-            }
+            // Esconde APENAS a tecla "E" ao se afastar (o textoCooldown continua ativo)
+            if (spriteRendererIndicador != null) spriteRendererIndicador.enabled = false;
         }
     }
 }

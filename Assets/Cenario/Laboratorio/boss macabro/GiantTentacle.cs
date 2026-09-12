@@ -37,7 +37,7 @@ public class GiantTentacle : MonoBehaviour
                 boss.RegistrarAcertoNoPlayer();
             }
 
-            Debug.Log("O Player foi atingido pelo Tentáculo no frame correto!");
+            Debug.Log("burger");
         }
     }
 
